@@ -1,0 +1,229 @@
+#World life expectancy grouped by gender, country & continent in ranks from 1 - 223. Which continent has the most countries with the highest ranks of surival?
+
+
+
+
+
+import pandas as pd
+import numpy as np
+import scipy
+import matplotlib.pyplot as plt
+from sklearn import tree
+from IPython.display import Image
+import pydotplus
+import graphviz
+%matplotlib inline
+!pip install plotly
+!pip install ipywidgets
+
+from google.colab import files
+uploaded = files.upload()
+
+life = pd.read_csv('world_life_expectancy.csv', encoding='latin-1')
+life.head(223)
+
+life.info()
+life.describe()
+
+#How many continents in the data.
+life['Continent'].unique()
+
+#Clean data - remove missing values, outliers or duplicates.
+life.isnull().sum()
+
+Nothing out of the ordinary so will keep all data.
+
+# Select only the numerical columns for correlation calculation
+numerical_life = life.select_dtypes(include=['float', 'int'])
+correlation_matrix = numerical_life.corr()
+print(correlation_matrix)
+
+Given that Overall LIfe is mostly correlated with Male Life and Female Life, we can conclude using this as a feature.
+
+#Feature engineer & Select relevant features for the continent with the highest ranks of survival. Determining which variables are to be related with the target variable, new or newly created variable!
+from scipy.stats import boxcox
+
+rank_boxcox = boxcox(life['Rank'])
+plt.hist(rank_boxcox, bins=10)
+plt.title('Box-Cox Rank')
+plt.show()
+
+plt.subplot(2, 3, 4)
+plt.hist(life["Rank"])
+plt.title("Histogram of Rank")
+plt.show()
+
+overall_life_boxcox = boxcox(life['Overall Life'])
+plt.hist(overall_life_boxcox, bins=10)
+plt.title('Box-Cox Overall Life')
+plt.show()
+
+plt.subplot(2, 3, 4)
+plt.hist(life["Overall Life"])
+plt.title("Histogram of Overall Life")
+plt.show()
+
+female_life_boxcox = boxcox(life['Female Life'])
+plt.hist(female_life_boxcox, bins=10)
+plt.title('Box-Cox Female Life')
+plt.show()
+
+plt.subplot(2, 3, 4)
+plt.hist(life["Female Life"])
+plt.title("Histogram of Female Life")
+plt.show()
+
+male_life_boxcox = boxcox(life['Rank'])
+plt.hist(male_life_boxcox, bins=10)
+plt.title('Box-Cox Male Life')
+plt.show()
+
+plt.subplot(2, 3, 4)
+plt.hist(life["Male Life"])
+plt.title("Histogram of Male Life")
+plt.show()
+
+
+from scipy.stats import jarque_bera
+from scipy.stats import normaltest
+
+jb_stats = jarque_bera(life["Rank"])
+norm_stats = normaltest(life["Rank"])
+
+print("Rank Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Rank Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(life["Overall Life"])
+norm_stats = normaltest(life["Overall Life"])
+
+print("Overall Life Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Overall Life Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(life["Female Life"])
+norm_stats = normaltest(life["Female Life"])
+
+print("Female Life Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Female Life Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+jb_stats = jarque_bera(life["Male Life"])
+norm_stats = normaltest(life["Male Life"])
+
+print("Male Life Jarque-Bera test statistics is {0} and p value is {1}".format(jb_stats[0], jb_stats[1]))
+print("Male Life Normality test statistics is {0} and p value is {1}".format(norm_stats[0], norm_stats[1]))
+
+From the above calculations, we can conclude to reject the null hypothesis that these are normally distirbuted. Since Overall Life, Male Life and Female Life have normal bell curves that show relevancy, we also know that the Continent is part of the important features. However, Female Life is closest to correlation with Overall Life instead of Male Life, so Female Life will be a secondary relevant feature also. Concluding, Overall Life and the Continent will be the features used to get to the target variable.
+
+count_table = pd.crosstab(life["Overall Life"], life["Continent"])
+count_table
+
+# prompt: Using dataframe count_table: create scatterplot for continent on y axis and overall life on x axis
+
+import altair as alt
+alt.Chart(count_table.reset_index()).mark_point().encode( # Reset index to make 'Overall Life' a column
+    x = 'Overall Life:Q', # Specify quantitative type for 'Overall Life'
+    y = alt.Y('Continent:N', title='Continent'),
+    color = 'Continent:N'
+).properties(height=250, width=350)
+
+# KNN Classification towards - Which continent has the most countries with the highest ranks of surival?
+
+from sklearn.neighbors import KNeighborsClassifier
+
+# Create a KNN classifier with 3 neighbors
+knn = KNeighborsClassifier(n_neighbors=3)
+
+# Train the classifier using the 'Overall Life' and 'Female Life' columns as features
+knn.fit(life[['Overall Life', 'Female Life']], life['Continent'])
+
+# Predict the continent for a new data point with 'Overall Life' of 75 and 'Female Life' of 80
+predicted_continent = knn.predict([[75, 80]])
+
+# Print the predicted continent
+print(predicted_continent)
+
+
+#Justify model with precision, recall and F1 score.
+from sklearn.metrics import classification_report
+
+# Predict the continent for each row
+predicted_continents = knn.predict(life[['Overall Life', 'Female Life']])
+
+# Print the classification report
+print(classification_report(life['Continent'], predicted_continents))
+
+accuracy = (predicted_continents == life['Continent']).mean()
+print("Accuracy:", accuracy)
+
+Overall the the F1 scores for Africa, Asia and Europe are the highest with a 72% accuracy.
+
+# Use random forest tree to find best ranked continent & accuracy
+
+from sklearn.ensemble import RandomForestClassifier
+
+# Create a random forest classifier
+forest = RandomForestClassifier()
+
+# Fit the forest to the data
+forest.fit(life[['Overall Life', 'Male Life', 'Female Life']], life['Continent'])
+
+# Predict the continent for each row
+predicted_continents = forest.predict(life[['Overall Life', 'Male Life', 'Female Life']])
+
+# Find the best ranked continent
+best_continent = life['Continent'].value_counts().index[0]
+
+# Calculate the accuracy of the predictions
+accuracy = (predicted_continents == life['Continent']).mean()
+
+# Print the results
+print("Best ranked continent:", best_continent)
+print("Accuracy:", accuracy)
+
+#Justify model with precision, recall and F1 score.
+from sklearn.metrics import classification_report
+
+# Predict the continent for each row
+predicted_continents = forest.predict(life[['Overall Life', 'Male Life', 'Female Life']])
+
+# Print the classification report
+print(classification_report(life['Continent'], predicted_continents))
+
+This model is ideal as all scores are 1 insuring 100% accuracy, HOWEVER, it only calculates the continent with the highest rank and not the target variable of which continent has the most most countries with the highest rank FOR SURVIVAL, although Africa does have the most countries with the highest ranks but high ranks are not good in this case. Given that information, KNN is 72% accurate on what we are actually testing for which is the continent with the highest ranks of survival.
+
+
+# @title Continent vs Rank :)
+
+from matplotlib import pyplot as plt
+import seaborn as sns
+figsize = (12, 1.2 * len(life['Continent'].unique()))
+plt.figure(figsize=figsize)
+sns.violinplot(life, x='Rank', y='Continent', inner='stick', palette='Dark2')
+sns.despine(top=True, right=True, bottom=True, left=True)
+title = 'Rank vs Continent'
+plt.title(title)
+plt.show()
+
+
+
+# @title Continent vs Overall Life :)
+
+from matplotlib import pyplot as plt
+import seaborn as sns
+figsize = (12, 1.2 * len(life['Continent'].unique()))
+plt.figure(figsize=figsize)
+sns.violinplot(life, x='Overall Life', y='Continent', inner='stick', palette='Dark2')
+sns.despine(top=True, right=True, bottom=True, left=True)
+title = 'Overall Life vs Continent'
+plt.title(title)
+plt.show()
+
+CONCLUSION - Which continent has the most countries with the highest rate of survival?
+
+The short answer is Europe. The long and probably most accurate answer lies beneath more accurate models. During the exercise we selected the KNN classifier similarity method and random forest model to help with the target question.
+
+The best model and most accurate model out of the two was the KNN classifier similarity method based on the analysis of both below.
+  KNN Classifier - model seemed to be utilized properly by idetifying the countries with the highest ranks and grouping them together in order to properly identify the continent with the highest count.
+  
+  Random Forest  - we utized this method with classifying in order to aggregate the countries with highest overall life ranks, incoporate the proper questions and grab the continent associated with target and support the accuracy. Even though the model stated "Africa" and came out with an accuracy of 1, why does Africa have the lowest overall life expectancies ages? From looking at the question again, this model returned the information that it was programmed to BUT not what the target variable needs to accomplish. Techincally Africa does have the most countries with the "highest ranks" of overall life BUT the "ranks" are misconstrued and the lower the rank the better.
+
+  Concluding that KNN classifier model predicted the actual information that was needed.
